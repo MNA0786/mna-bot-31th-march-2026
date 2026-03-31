@@ -5,11 +5,6 @@ Options -Indexes
     Deny from all
 </FilesMatch>
 
-<Directory "csv_data">
-    Order allow,deny
-    Deny from all
-</Directory>
-
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
