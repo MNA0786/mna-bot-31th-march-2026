@@ -1,0 +1,16 @@
+Options -Indexes
+
+<FilesMatch "\.(json|log|txt|md|yml|yaml|env|ini|sql|db|bak)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<Directory "csv_data">
+    Order allow,deny
+    Deny from all
+</Directory>
+
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [L]
