@@ -1206,67 +1206,148 @@ function admin_panel_all_movies() {
 // MAIN UPDATE PROCESSING & ADMIN PANEL ROUTING
 // ==============================
 // IMPORTANT: Webhook must be processed BEFORE admin login
+// ==============================
+// WEBHOOK HANDLER - FIXED VERSION
+// ==============================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_CONTENT_TYPE']) && strpos($_SERVER['HTTP_CONTENT_TYPE'], 'application/json') !== false) {
-    // It's a telegram webhook
-    $update = json_decode(file_get_contents('php://input'), true);
+    // Get raw input
+    $input = file_get_contents('php://input');
+    $update = json_decode($input, true);
+    
     if ($update) {
-        get_cached_movies();
+        // Log incoming webhook
+        bot_log("Webhook received: " . substr($input, 0, 200), "DEBUG");
         
-        // Handle channel posts - AUTO INDEXING FIX
+        // Handle channel posts
         if (isset($update['channel_post'])) {
             $message = $update['channel_post'];
             $message_id = $message['message_id'];
             $chat_id = $message['chat']['id'];
             $channel_type = get_channel_type_by_id($chat_id);
             
-            bot_log("Channel post received from ID: $chat_id, Type: $channel_type", "DEBUG");
-            
-            if ($channel_type == 'other' || $channel_type == 'request') {
-                bot_log("Ignoring post from channel ID: $chat_id", "WARNING");
-                exit;
-            }
-            
-            $movie_name = '';
-            if (isset($message['caption'])) {
-                $movie_name = trim($message['caption']);
-            } elseif (isset($message['text'])) {
-                $movie_name = trim($message['text']);
-            } elseif (isset($message['document'])) {
-                $movie_name = trim($message['document']['file_name']);
-            } else {
-                $movie_name = 'Unknown Movie ' . date('Y-m-d H:i:s');
-            }
-            
-            if (empty($movie_name)) {
-                bot_log("Empty movie name from channel post", "WARNING");
-                exit;
-            }
-            
-            $csv_file = get_csv_filename($channel_type, $chat_id);
-            bot_log("Attempting to write to CSV: $csv_file", "DEBUG");
-            
-            if (!is_writable(CSV_DIR)) {
-                $error_msg = "❌ Auto-indexing failed: CSV directory not writable!\n\nPlease chmod 777 " . CSV_DIR;
-                bot_log($error_msg, "ERROR");
-                sendMessage(ADMIN_ID, $error_msg);
-                exit;
-            }
-            
-            $entry = [$movie_name, $message_id];
-            $handle = fopen($csv_file, "a");
-            if ($handle) {
-                fputcsv($handle, $entry);
-                fclose($handle);
-                bot_log("✅ Movie auto-indexed: $movie_name (ID: $message_id) to $channel_type");
-                global $movie_cache;
-                $movie_cache = [];
-            } else {
-                $error_msg = "❌ Failed to open CSV file for writing: $csv_file";
-                bot_log($error_msg, "ERROR");
-                sendMessage(ADMIN_ID, $error_msg);
+            if ($channel_type != 'other' && $channel_type != 'request') {
+                $movie_name = '';
+                if (isset($message['caption'])) $movie_name = trim($message['caption']);
+                elseif (isset($message['text'])) $movie_name = trim($message['text']);
+                elseif (isset($message['document'])) $movie_name = trim($message['document']['file_name']);
+                else $movie_name = 'Unknown Movie';
+                
+                if (!empty($movie_name)) {
+                    $csv_file = get_csv_filename($channel_type, $chat_id);
+                    $entry = [$movie_name, $message_id];
+                    $handle = fopen($csv_file, "a");
+                    if ($handle) {
+                        fputcsv($handle, $entry);
+                        fclose($handle);
+                        global $movie_cache;
+                        $movie_cache = [];
+                        bot_log("Auto-indexed: $movie_name (ID: $message_id) to $channel_type");
+                    }
+                }
             }
             exit;
         }
+        
+        // Handle private/user messages
+        if (isset($update['message'])) {
+            $message = $update['message'];
+            $chat_id = $message['chat']['id'];
+            $user_id = $message['from']['id'];
+            $text = isset($message['text']) ? $message['text'] : '';
+            $chat_type = $message['chat']['type'] ?? 'private';
+            
+            if ($chat_type !== 'private') {
+                if (strpos($text, '/') !== 0 && !is_valid_movie_query($text)) exit;
+            }
+            
+            if (strpos($text, '/') === 0) {
+                $parts = explode(' ', $text);
+                $command = strtolower($parts[0]);
+                $params = array_slice($parts, 1);
+                handle_command($chat_id, $user_id, $command, $params);
+            } else if (!empty(trim($text))) {
+                $lang = detect_language($text);
+                send_multilingual_response($chat_id, 'searching', $lang);
+                advanced_search($chat_id, $text, $user_id);
+            }
+        }
+        
+        // Handle callback queries
+        if (isset($update['callback_query'])) {
+            $query = $update['callback_query'];
+            $message = $query['message'];
+            $chat_id = $message['chat']['id'];
+            $user_id = $query['from']['id'];
+            $data = $query['data'];
+            global $movie_messages;
+            $movie_lower = strtolower($data);
+            
+            if (isset($movie_messages[$movie_lower])) {
+                foreach ($movie_messages[$movie_lower] as $entry) {
+                    deliver_item_to_chat($chat_id, $entry);
+                    usleep(200000);
+                }
+                sendMessage($chat_id, "✅ '$data' ka info mil gaya!\n\n📢 Join channel to download: " . MAIN_CHANNEL);
+                answerCallbackQuery($query['id'], "🎬 Items sent!");
+            } elseif (strpos($data, 'pag_') === 0) {
+                $parts = explode('_', $data);
+                $action = $parts[1];
+                $session_id = isset($parts[2]) ? $parts[2] : '';
+                if ($action == 'first') totalupload_controller($chat_id, 1, [], $session_id);
+                elseif ($action == 'last') { $all = get_cached_movies(); $total_pages = ceil(count($all) / ITEMS_PER_PAGE); totalupload_controller($chat_id, $total_pages, [], $session_id); }
+                elseif ($action == 'prev') { $current = isset($parts[2]) ? intval($parts[2]) : 1; $sid = isset($parts[3]) ? $parts[3] : ''; totalupload_controller($chat_id, max(1, $current-1), [], $sid); }
+                elseif ($action == 'next') { $current = isset($parts[2]) ? intval($parts[2]) : 1; $sid = isset($parts[3]) ? $parts[3] : ''; $all = get_cached_movies(); $total_pages = ceil(count($all) / ITEMS_PER_PAGE); totalupload_controller($chat_id, min($total_pages, $current+1), [], $sid); }
+                elseif (is_numeric($action)) { $page_num = intval($action); $sid = isset($parts[2]) ? $parts[2] : ''; totalupload_controller($chat_id, $page_num, [], $sid); }
+                answerCallbackQuery($query['id'], "Page changed");
+            } elseif (strpos($data, 'send_') === 0) {
+                $parts = explode('_', $data);
+                $page_num = isset($parts[1]) ? intval($parts[1]) : 1;
+                $sid = isset($parts[2]) ? $parts[2] : '';
+                $all = get_cached_movies();
+                $pg = paginate_movies($all, $page_num, []);
+                batch_download_with_progress($chat_id, $pg['slice'], $page_num);
+                answerCallbackQuery($query['id'], "Batch started");
+            } elseif (strpos($data, 'prev_') === 0) {
+                $parts = explode('_', $data);
+                $page_num = isset($parts[1]) ? intval($parts[1]) : 1;
+                $sid = isset($parts[2]) ? $parts[2] : '';
+                $all = get_cached_movies();
+                $pg = paginate_movies($all, $page_num, []);
+                $preview = "👁️ Page $page_num Preview:\n";
+                for ($i=0; $i<min(5, count($pg['slice'])); $i++) {
+                    $preview .= ($i+1).". ".$pg['slice'][$i]['movie_name']."\n";
+                }
+                sendMessage($chat_id, $preview, null, 'HTML');
+                answerCallbackQuery($query['id'], "Preview sent");
+            } elseif (strpos($data, 'flt_') === 0) {
+                $parts = explode('_', $data);
+                $filter = $parts[1];
+                $sid = isset($parts[2]) ? $parts[2] : '';
+                $filters = [];
+                if ($filter == 'theater') $filters = ['channel_type'=>'theater'];
+                elseif ($filter == 'backup') $filters = ['channel_type'=>'backup'];
+                totalupload_controller($chat_id, 1, $filters, $sid);
+                answerCallbackQuery($query['id'], "Filter applied");
+            } elseif ($data == 'request_movie') {
+                sendMessage($chat_id, "📝 Use /request movie_name to request.", null, 'HTML');
+                answerCallbackQuery($query['id'], "Request help");
+            } elseif (strpos($data, 'auto_request_') === 0) {
+                $movie_name = base64_decode(str_replace('auto_request_', '', $data));
+                $lang = detect_language($movie_name);
+                if (add_movie_request($user_id, $movie_name, $lang)) send_multilingual_response($chat_id, 'request_success', $lang);
+                else send_multilingual_response($chat_id, 'request_limit', $lang);
+                answerCallbackQuery($query['id'], "Request sent");
+            } elseif ($data == 'help_command') {
+                handle_command($chat_id, $user_id, '/help', []);
+                answerCallbackQuery($query['id'], "Help");
+            } else {
+                sendMessage($chat_id, "❌ Movie not found: $data");
+                answerCallbackQuery($query['id'], "Not found");
+            }
+        }
+    }
+    exit;
+}
         
         // Handle private/user messages
         if (isset($update['message'])) {
