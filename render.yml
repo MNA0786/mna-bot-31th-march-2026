@@ -2,7 +2,7 @@ services:
   - type: web
     name: entertainment-tadka-bot
     runtime: image
-    repo: https://github.com/yourusername/your-repo-name
+    repo: https://github.com/yourusername/your-repo
     plan: free
     envVars:
       - key: BOT_TOKEN
