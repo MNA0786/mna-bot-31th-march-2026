@@ -1,12 +1,13 @@
 <?php
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0);  // Web pe error mat dikhao
 ini_set('log_errors', 1);
-ini_set('error_log', '/var/www/html/error.log');
+ini_set('error_log', __DIR__ . '/php_error.log');
 
-// Create error.log if not exists
-if (!file_exists('error.log')) {
-    file_put_contents('error.log', "[" . date('Y-m-d H:i:s') . "] Log started\n");
+// Create log file with write permission
+if (!file_exists('php_error.log')) {
+    file_put_contents('php_error.log', "[" . date('Y-m-d H:i:s') . "] Log started\n");
+    chmod('php_error.log', 0666);
 }
 
 // ==============================
