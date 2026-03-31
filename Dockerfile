@@ -3,9 +3,10 @@ FROM php:8.2-apache
 RUN docker-php-ext-install fileinfo
 RUN a2enmod rewrite
 
-# Copy custom port configuration script
-COPY ./start.sh /start.sh
-RUN chmod +x /start.sh
+# Set Apache to listen on Render's PORT
+ENV PORT=1000
+RUN sed -i "s/Listen 80/Listen ${PORT}/g" /etc/apache2/ports.conf
+RUN sed -i "s/:80>/:${PORT}>/g" /etc/apache2/sites-available/000-default.conf
 
 WORKDIR /var/www/html
 
@@ -16,5 +17,5 @@ RUN chown -R www-data:www-data /var/www/html && \
     mkdir -p /var/www/html/csv_data && \
     chmod 777 /var/www/html/csv_data
 
-# Use custom start script to set port
-CMD ["/start.sh"]
+EXPOSE ${PORT}
+CMD ["apache2-foreground"]
