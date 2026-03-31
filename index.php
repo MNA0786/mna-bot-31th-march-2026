@@ -1089,7 +1089,7 @@ function admin_panel_dashboard() {
     if ($pending_count == 0) {
         echo '<p>No pending requests.</p>';
     } else {
-        echo '<table><tr><th>#</th><th>Movie Name</th><th>User ID</th><th>Date</th><th>Action</th></tr>';
+        echo ' <table> <tr><th>#</th><th>Movie Name</th><th>User ID</th><th>Date</th><th>Action</th></tr>';
         $i = 1;
         foreach ($requests_data['requests'] as $req) {
             if ($req['status'] == 'pending') {
@@ -1134,7 +1134,7 @@ function admin_panel_dashboard() {
     if (empty($movies)) {
         echo '<p>No movies found.</p>';
     } else {
-        echo '<table><tr><th>#</th><th>Movie Name</th><th>Message ID</th><th>Channel</th></tr>';
+        echo ' <table> <tr><th>#</th><th>Movie Name</th><th>Message ID</th><th>Channel</th></tr>';
         $i = 1;
         foreach ($movies as $m) {
             echo '<tr>
@@ -1167,7 +1167,7 @@ function admin_panel_all_movies() {
     <body>
     <div class="container">
         <div class="header"><h1>📋 All Movies ('.count($all_movies).')</h1><a href="?">⬅ Back to Dashboard</a></div>
-        <table><tr><th>#</th><th>Movie Name</th><th>Message ID</th><th>Channel</th></tr>';
+         <table> <tr><th>#</th><th>Movie Name</th><th>Message ID</th><th>Channel</th></tr>';
     $i = 1;
     foreach ($all_movies as $m) {
         echo '<tr><td>'.$i.'</td><td>'.htmlspecialchars($m['movie_name']).'</td><td>'.$m['message_id_raw'].'</td><td>'.get_channel_display_name($m['channel_type']).'</td></tr>';
@@ -1179,8 +1179,7 @@ function admin_panel_all_movies() {
 // ==============================
 // MAIN UPDATE PROCESSING & ADMIN PANEL ROUTING
 // ==============================
-
-// Check if this is a web request (not a telegram update)
+// IMPORTANT: Webhook must be processed BEFORE admin login
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_CONTENT_TYPE']) && strpos($_SERVER['HTTP_CONTENT_TYPE'], 'application/json') !== false) {
     // It's a telegram webhook
     $update = json_decode(file_get_contents('php://input'), true);
@@ -1196,17 +1195,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_CONTENT_TYPE']
             
             bot_log("Channel post received from ID: $chat_id, Type: $channel_type", "DEBUG");
             
-            // Ignore unknown or request channels
-            if ($channel_type == 'other') {
-                bot_log("Ignoring post from unknown channel ID: $chat_id", "WARNING");
-                exit;
-            }
-            if ($channel_type == 'request') {
-                bot_log("Ignoring post from request channel", "DEBUG");
+            if ($channel_type == 'other' || $channel_type == 'request') {
+                bot_log("Ignoring post from channel ID: $chat_id", "WARNING");
                 exit;
             }
             
-            // Extract movie name
             $movie_name = '';
             if (isset($message['caption'])) {
                 $movie_name = trim($message['caption']);
@@ -1223,11 +1216,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_CONTENT_TYPE']
                 exit;
             }
             
-            // Get CSV file path
             $csv_file = get_csv_filename($channel_type, $chat_id);
             bot_log("Attempting to write to CSV: $csv_file", "DEBUG");
             
-            // Check if directory is writable
             if (!is_writable(CSV_DIR)) {
                 $error_msg = "❌ Auto-indexing failed: CSV directory not writable!\n\nPlease chmod 777 " . CSV_DIR;
                 bot_log($error_msg, "ERROR");
@@ -1235,7 +1226,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_CONTENT_TYPE']
                 exit;
             }
             
-            // Write to CSV
             $entry = [$movie_name, $message_id];
             $handle = fopen($csv_file, "a");
             if ($handle) {
@@ -1350,14 +1340,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_SERVER['HTTP_CONTENT_TYPE']
     }
 }
 
-// If we reach here, it's a web request (browser) for admin panel
-if (isset($_GET['logout'])) {
-    session_destroy();
-    header('Location: ?');
-    exit;
-}
-
-// Handle admin login
+// Admin panel login handling (only if not webhook)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_pass'])) {
     if ($_POST['admin_pass'] === ADMIN_PASSWORD) {
         $_SESSION['admin_logged_in'] = true;
@@ -1369,9 +1352,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['admin_pass'])) {
     }
 }
 
-// Handle admin actions
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header('Location: ?');
+    exit;
+}
+
+// Admin panel actions
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
-    // Approve single request
     if (isset($_GET['approve'])) {
         $req_id = $_GET['approve'];
         $requests_data = json_decode(file_get_contents(REQUEST_FILE), true);
@@ -1387,17 +1375,15 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         exit;
     }
     
-    // Bulk approve
     if (isset($_POST['bulk_approve'])) {
         $count = intval($_POST['bulk_count']);
         if ($count > 0) {
-            $approved = bulk_approve_requests(0, $count);
+            bulk_approve_requests(0, $count);
         }
         header('Location: ?');
         exit;
     }
     
-    // Add movie
     if (isset($_POST['add_movie'])) {
         $movie_name = trim($_POST['movie_name']);
         $message_id = trim($_POST['message_id']);
@@ -1408,25 +1394,17 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
             $channel_id = PRIVATE_CHANNEL_1_ID;
         }
         if (!empty($movie_name) && !empty($message_id)) {
-            if (add_movie_to_csv($movie_name, $message_id, $channel_type, $channel_id)) {
-                $_SESSION['add_msg'] = "Movie added successfully!";
-            } else {
-                $_SESSION['add_error'] = "Failed to add movie.";
-            }
-        } else {
-            $_SESSION['add_error'] = "Movie name and Message ID required.";
+            add_movie_to_csv($movie_name, $message_id, $channel_type, $channel_id);
         }
         header('Location: ?');
         exit;
     }
     
-    // Show all movies
     if (isset($_GET['view_all'])) {
         admin_panel_all_movies();
         exit;
     }
     
-    // Show dashboard
     admin_panel_dashboard();
     exit;
 }
