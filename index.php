@@ -1,4 +1,10 @@
 <?php
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
+ini_set('error_log', 'error.log');
+
 // ==============================
 // SECURITY HEADERS & BASIC SETUP
 // ==============================
@@ -297,6 +303,7 @@ function add_movie_to_csv($movie_name, $message_id, $channel_type, $channel_id =
 // ==============================
 function apiRequest($method, $params = array(), $is_multipart = false) {
     $url = "https://api.telegram.org/bot" . BOT_TOKEN . "/" . $method;
+    
     if ($is_multipart) {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
@@ -305,20 +312,34 @@ function apiRequest($method, $params = array(), $is_multipart = false) {
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         $res = curl_exec($ch);
-        if ($res === false) bot_log("CURL ERROR: " . curl_error($ch), 'ERROR');
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        if ($res === false) {
+            $error = curl_error($ch);
+            bot_log("CURL ERROR: $error", 'ERROR');
+            file_put_contents(LOG_FILE, "[ERROR] CURL: $error\n", FILE_APPEND);
+        } else {
+            bot_log("API Response: $res", 'DEBUG');
+        }
         curl_close($ch);
         return $res;
     } else {
+        $postData = http_build_query($params);
         $options = array(
             'http' => array(
                 'method' => 'POST',
-                'content' => http_build_query($params),
+                'content' => $postData,
                 'header' => "Content-Type: application/x-www-form-urlencoded\r\n"
             )
         );
         $context = stream_context_create($options);
         $result = @file_get_contents($url, false, $context);
-        if ($result === false) bot_log("API Request failed for method: $method", 'ERROR');
+        if ($result === false) {
+            $error = error_get_last();
+            bot_log("API Request failed for method: $method - " . ($error['message'] ?? 'Unknown'), 'ERROR');
+            file_put_contents(LOG_FILE, "[ERROR] API: $method failed\n", FILE_APPEND);
+        } else {
+            bot_log("API Response: $result", 'DEBUG');
+        }
         return $result;
     }
 }
