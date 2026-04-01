@@ -1,0 +1,52 @@
+# ==================== BOT TOKEN ====================
+BOT_TOKEN=8315381064:AAGk0FGVGmB8j5SjpBvW3rD3_kQHe_hyOWU
+
+# ==================== ADMIN ====================
+ADMIN_ID=1080317415
+
+# ==================== PUBLIC CHANNELS ====================
+MAIN_CHANNEL=@EntertainmentTadka786
+MAIN_CHANNEL_ID=-1003181705395
+MAIN_CHANNEL_IS_PUBLIC=true
+
+SERIAL_CHANNEL=@Entertainment_Tadka_Serial_786
+SERIAL_CHANNEL_ID=-1003614546520
+SERIAL_CHANNEL_IS_PUBLIC=true
+
+THEATER_CHANNEL=@threater_print_movies
+THEATER_CHANNEL_ID=-1002831605258
+THEATER_CHANNEL_IS_PUBLIC=true
+
+BACKUP_CHANNEL=@ETBackup
+BACKUP_CHANNEL_ID=-1002964109368
+BACKUP_CHANNEL_IS_PUBLIC=true
+
+# ==================== PRIVATE CHANNELS ====================
+PRIVATE_CHANNEL_1_ID=-1003251791991
+PRIVATE_CHANNEL_1_IS_PUBLIC=false
+
+PRIVATE_CHANNEL_2_ID=-1002337293281
+PRIVATE_CHANNEL_2_IS_PUBLIC=false
+
+REQUEST_GROUP=@EntertainmentTadka7860
+REQUEST_GROUP_ID=-1003083386043
+REQUEST_GROUP_IS_PUBLIC=false
+
+# ==================== CSV FILES ====================
+CSV_FILE_MAIN=movies_main.csv
+CSV_FILE_SERIAL=movies_serial.csv
+CSV_FILE_THEATER=movies_theater.csv
+CSV_FILE_BACKUP=movies_backup.csv
+CSV_FILE_PRIVATE1=movies_private1.csv
+CSV_FILE_PRIVATE2=movies_private2.csv
+CSV_FILE_REQUEST=movies_request.csv
+
+# ==================== SYSTEM SETTINGS ====================
+ITEMS_PER_PAGE=5
+MAX_SEARCH_RESULTS=15
+DAILY_REQUEST_LIMIT=5
+AUTO_BACKUP_HOUR=03
+CACHE_EXPIRY=300
+MAINTENANCE_MODE=false
+ENVIRONMENT=production
+PORT=80

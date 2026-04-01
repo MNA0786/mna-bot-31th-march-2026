@@ -1,0 +1,26 @@
+{
+    "name": "entertainment-tadka/telegram-bot",
+    "description": "Entertainment Tadka Telegram Movie Bot v3.0",
+    "type": "project",
+    "require": {
+        "php": ">=8.1",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-zip": "*",
+        "ext-mbstring": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "chmod 666 movies_main.csv movies_serial.csv movies_theater.csv movies_backup.csv movies_private1.csv movies_private2.csv movies_request.csv users.json bot_stats.json movie_requests.json bot_activity.log 2>/dev/null || true",
+            "chmod 777 backups 2>/dev/null || true"
+        ]
+    },
+    "config": {
+        "platform-check": false
+    }
+}

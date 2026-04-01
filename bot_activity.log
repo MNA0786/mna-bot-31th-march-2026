@@ -1,0 +1,4 @@
+[2026-04-01 00:00:00] SYSTEM: Bot v3.0 initialized with separate CSV files
+[2026-04-01 00:00:00] SYSTEM: Public channels: Main, Serial, Theater, Backup
+[2026-04-01 00:00:00] SYSTEM: Private channels: 2 channels (hidden from users)
+[2026-04-01 00:00:00] SYSTEM: Forward header: ON for public, OFF for private
